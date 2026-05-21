@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAuthHeaders } from './auth.js';
+import SendGlobalNotification from './admin/SendGlobalNotification.jsx';
 import './Admin.css';
 
 const ADMIN_USERS_API = '/api/admin/users';
 const APPROVE_USER_API = '/api/approve-user';
 const ADMIN_FORECAST_API = '/api/admin/forecast';
 const FORECAST_API = '/api/forecast';
-
 function IconWave() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -245,6 +245,8 @@ function AdminDashboard({ username, onLogout }) {
               </div>
             </form>
           </section>
+
+          <SendGlobalNotification />
 
           <section className="glass admin-panel" aria-labelledby="admin-heading">
             <div className="admin-panel__header">

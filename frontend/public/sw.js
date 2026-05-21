@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'surfforecast-v1';
+const CACHE_VERSION = 'surfforecast-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -37,6 +37,56 @@ self.addEventListener('activate', (event) => {
 function isApiRequest(url) {
   return url.pathname.startsWith('/api');
 }
+
+self.addEventListener('push', (event) => {
+  let data = {
+    title: 'SurfForceast',
+    body: 'New ocean update',
+    url: '/',
+    icon: '/icons/icon-192.png',
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      data = { ...data, ...parsed };
+    } catch {
+      data.body = event.data.text() || data.body;
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/' },
+    tag: 'surfforecast-alert',
+    renotify: true,
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        for (const client of windowClients) {
+          if ('focus' in client) {
+            return client.focus();
+          }
+        }
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+        return undefined;
+      })
+  );
+});
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
