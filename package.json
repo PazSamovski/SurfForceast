@@ -1,9 +1,9 @@
 {
     "name": "surf-forecast-root",
-    "version": "1.0.0",
-    "scripts": {
-      "build": "cd frontend && npm install && npm run build",
-      "start": "cd backend && node server.js",
-      "install": "cd frontend && npm install && cd ../backend && npm install"
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd frontend && npm install && npx vite build",
+    "start": "cd backend && node server.js",
+    "install": "cd frontend && npm install && cd ../backend && npm install"
     }
   }
