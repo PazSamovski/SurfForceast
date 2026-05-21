@@ -4,7 +4,6 @@ import Register from './Register.jsx';
 import AdminDashboard from './Admin.jsx';
 import ResetPassword from './ResetPassword.jsx';
 import ChatWidget from './ChatWidget.jsx';
-import PushSubscribeBanner from './PushSubscribeBanner.jsx';
 import { getAuthHeaders } from './auth.js';
 import { getWaveGenreDisplay } from './waveGenres.js';
 import './App.css';
@@ -674,8 +673,6 @@ function DashboardApp({ username, onLogout, isAdmin }) {
         </header>
 
         <main className="main">
-          <PushSubscribeBanner />
-
           {showInitialLoader && (
             <section className="glass glass--centered" aria-busy="true" aria-label="Loading">
               <div className="loader">

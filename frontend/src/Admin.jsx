@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAuthHeaders } from './auth.js';
-import SendGlobalNotification from './admin/SendGlobalNotification.jsx';
 import './Admin.css';
 
 const ADMIN_USERS_API = '/api/admin/users';
@@ -245,8 +244,6 @@ function AdminDashboard({ username, onLogout }) {
               </div>
             </form>
           </section>
-
-          <SendGlobalNotification />
 
           <section className="glass admin-panel" aria-labelledby="admin-heading">
             <div className="admin-panel__header">
