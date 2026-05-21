@@ -19,6 +19,7 @@ const fs = require('fs').promises;
 const ChatMessage = require('./models/ChatMessage');
 const User = require('./models/User');
 const PasswordResetToken = require('./models/PasswordResetToken');
+const ManagerForecast = require('./models/ManagerForecast');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -618,6 +619,72 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     res.status(500).json({
       error: true,
       message: 'Unable to verify account status.',
+    });
+  }
+});
+
+function formatForecastResponse(doc) {
+  if (!doc?.isActive || !doc.text?.trim()) {
+    return null;
+  }
+
+  return {
+    text: doc.text.trim(),
+    updatedAt: doc.updatedAt?.toISOString() ?? null,
+  };
+}
+
+app.get('/api/forecast', async (req, res) => {
+  try {
+    const doc = await ManagerForecast.findOne().sort({ updatedAt: -1 });
+
+    res.json({
+      forecast: formatForecastResponse(doc),
+    });
+  } catch (err) {
+    console.error('GET /api/forecast error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to load manager forecast.',
+    });
+  }
+});
+
+app.post('/api/admin/forecast', authMiddleware, async (req, res) => {
+  try {
+    const adminCheck = await requireAdminUser(req.userId);
+
+    if (adminCheck.error) {
+      return res.status(adminCheck.error.status).json({
+        error: true,
+        message: adminCheck.error.message,
+      });
+    }
+
+    const trimmedText = String(req.body?.text ?? '').trim();
+
+    const doc = await ManagerForecast.findOneAndUpdate(
+      {},
+      {
+        text: trimmedText,
+        isActive: Boolean(trimmedText),
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    const forecast = formatForecastResponse(doc);
+
+    res.json({
+      message: forecast
+        ? 'Daily forecast published.'
+        : 'Daily forecast cleared.',
+      forecast,
+    });
+  } catch (err) {
+    console.error('POST /api/admin/forecast error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to save manager forecast.',
     });
   }
 });

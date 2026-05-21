@@ -1,3 +1,133 @@
+.admin-forecast {
+  width: 100%;
+}
+
+.admin-forecast__header {
+  margin-bottom: var(--card-gap);
+}
+
+.admin-forecast__title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.admin-forecast__subtitle {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.admin-forecast__success {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--card-radius);
+  font-size: 0.85rem;
+  margin-bottom: var(--card-gap);
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+}
+
+.admin-forecast__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+}
+
+.admin-forecast__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.admin-forecast__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.admin-forecast__textarea {
+  font-family: var(--font);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--card-bg-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-radius);
+  padding: 0.85rem 1rem;
+  resize: vertical;
+  min-height: 110px;
+}
+
+.admin-forecast__textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.2);
+  background: var(--card-bg);
+}
+
+.admin-forecast__textarea:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.admin-forecast__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.admin-forecast__save {
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-text);
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.15rem;
+  cursor: pointer;
+  box-shadow: var(--card-shadow);
+}
+
+.admin-forecast__save:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.admin-forecast__save:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.admin-forecast__clear {
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--card-bg-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0.6rem 1.15rem;
+  cursor: pointer;
+}
+
+.admin-forecast__clear:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.admin-forecast__clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .admin-panel {
   width: 100%;
 }

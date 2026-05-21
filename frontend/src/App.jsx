@@ -5,11 +5,12 @@ import AdminDashboard from './Admin.jsx';
 import ResetPassword from './ResetPassword.jsx';
 import ChatWidget from './ChatWidget.jsx';
 import { getAuthHeaders } from './auth.js';
-import { getWaveGenreImageUrl, WAVE_GENRES } from './waveGenres.js';
+import { getWaveGenreDisplay } from './waveGenres.js';
 import './App.css';
 
 const API_BASE = '/api/surf';
 const AUTH_ME_API = '/api/auth/me';
+const FORECAST_API = '/api/forecast';
 
 const SPOTS = [
   { id: 'Netanya', label: 'Netanya' },
@@ -180,10 +181,7 @@ function buildMetrics(surf) {
       icon: IconWave,
       live: hasLiveValue(surf?.waveHeight),
       waveGenre,
-      waveImageUrl: getWaveGenreImageUrl(waveGenre),
-      waveGenreDescription: waveGenre
-        ? WAVE_GENRES[waveGenre]?.description
-        : null,
+      waveDisplay: getWaveGenreDisplay(waveGenre),
     },
     {
       id: 'swellPeriod',
@@ -243,7 +241,8 @@ function MetricTile({ metric }) {
   const Icon = metric.icon;
   const isPlaceholder = metric.value === PLACEHOLDER;
   const isWaveHeight = metric.id === 'waveHeight';
-  const showWaveVisual = isWaveHeight && metric.waveImageUrl && metric.waveGenre;
+  const waveDisplay = isWaveHeight ? metric.waveDisplay : null;
+  const showWaveVisual = Boolean(waveDisplay);
 
   return (
     <article
@@ -253,12 +252,21 @@ function MetricTile({ metric }) {
     >
       {showWaveVisual ? (
         <div className="metric__wave-visual" aria-hidden="true">
-          <img
-            src={metric.waveImageUrl}
-            alt={`${metric.waveGenre} wave conditions`}
-            className="metric__wave-image"
-            loading="lazy"
-          />
+          {waveDisplay.type === 'image' ? (
+            <img
+              src={waveDisplay.imageUrl}
+              alt={`${waveDisplay.genre} wave conditions`}
+              className="metric__wave-image"
+              loading="lazy"
+            />
+          ) : (
+            <span
+              className="metric__wave-emoji"
+              style={{ fontSize: waveDisplay.emojiSize }}
+            >
+              {waveDisplay.emoji}
+            </span>
+          )}
         </div>
       ) : (
         <div className="metric__icon-wrap">
@@ -268,7 +276,7 @@ function MetricTile({ metric }) {
       <div className="metric__body">
         <span className="metric__label">{metric.label}</span>
         {showWaveVisual && (
-          <span className="metric__wave-genre">{metric.waveGenre}</span>
+          <span className="metric__wave-genre">{waveDisplay.genre}</span>
         )}
         <p className={`metric__value ${isPlaceholder ? 'metric__value--placeholder' : ''}`}>
           {metric.value}
@@ -279,8 +287,8 @@ function MetricTile({ metric }) {
             <span className="metric__unit metric__unit--muted">{metric.unit}</span>
           )}
         </p>
-        {showWaveVisual && metric.waveGenreDescription && (
-          <p className="metric__wave-desc">{metric.waveGenreDescription}</p>
+        {showWaveVisual && waveDisplay.description && (
+          <p className="metric__wave-desc">{waveDisplay.description}</p>
         )}
       </div>
     </article>
@@ -505,12 +513,30 @@ function PendingApproval({ username, onLogout, onRefresh, checking }) {
   );
 }
 
+function formatForecastUpdated(isoTime) {
+  if (!isoTime) return null;
+  try {
+    return new Date(isoTime).toLocaleString('en-GB', {
+      timeZone: ISRAEL_TZ,
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch {
+    return null;
+  }
+}
+
 function DashboardApp({ username, onLogout, isAdmin }) {
   const [currentSpot, setCurrentSpot] = useState('Netanya');
   const [surf, setSurf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [managerForecast, setManagerForecast] = useState(null);
   const [now, setNow] = useState(() => new Date());
   const isFirstLoad = useRef(true);
 
@@ -550,6 +576,32 @@ function DashboardApp({ username, onLogout, isAdmin }) {
   }, [currentSpot, fetchSurf]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchForecast() {
+      try {
+        const res = await fetch(FORECAST_API);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Unable to load forecast');
+        }
+        if (!cancelled) {
+          setManagerForecast(data.forecast ?? null);
+        }
+      } catch {
+        if (!cancelled) {
+          setManagerForecast(null);
+        }
+      }
+    }
+
+    fetchForecast();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), TICK_MS);
     return () => clearInterval(tick);
   }, []);
@@ -571,6 +623,7 @@ function DashboardApp({ username, onLogout, isAdmin }) {
   const showInitialLoader = loading && !surf;
   const showDashboard = Boolean(surf);
   const showErrorOnly = error && !surf;
+  const forecastUpdatedLabel = formatForecastUpdated(managerForecast?.updatedAt);
 
   return (
     <div className="app">
@@ -634,6 +687,26 @@ function DashboardApp({ username, onLogout, isAdmin }) {
               <p className="glass__error-title">Unable to load surf data</p>
               <p className="glass__error-detail">{error}</p>
               <p className="glass__error-hint">Start the backend with <code>npm start</code> in the backend folder.</p>
+            </section>
+          )}
+
+          {managerForecast?.text && (
+            <section className="manager-forecast" aria-labelledby="manager-forecast-heading">
+              <div className="manager-forecast__header">
+                <span className="manager-forecast__badge">Manager Update</span>
+                <h2 id="manager-forecast-heading" className="manager-forecast__title">
+                  Manager&apos;s Forecast
+                </h2>
+                {forecastUpdatedLabel && (
+                  <time
+                    className="manager-forecast__time"
+                    dateTime={managerForecast.updatedAt}
+                  >
+                    Updated {forecastUpdatedLabel}
+                  </time>
+                )}
+              </div>
+              <p className="manager-forecast__text">{managerForecast.text}</p>
             </section>
           )}
 

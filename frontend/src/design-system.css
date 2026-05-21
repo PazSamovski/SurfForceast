@@ -1,27 +1,51 @@
-/* SurfForceast — card-based design tokens */
+/* SurfForceast — design tokens (cards on ocean) */
 :root {
   --font: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
+  /* Ocean page */
+  --ocean-deep: #031a2b;
+  --ocean-mid: #0b3d5c;
+  --ocean-bright: #1a7aa8;
+  --ocean-sky: #5eb8d9;
+  --ocean-foam: #b8e4f2;
+  --page-gradient: linear-gradient(
+    165deg,
+    var(--ocean-deep) 0%,
+    #052840 18%,
+    var(--ocean-mid) 42%,
+    var(--ocean-bright) 68%,
+    var(--ocean-sky) 88%,
+    var(--ocean-foam) 100%
+  );
+
+  /* Elevated cards on sea */
   --card-bg: #ffffff;
   --card-bg-muted: #f8fafc;
   --card-radius: 16px;
-  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --card-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.08);
   --card-padding: 20px;
-  --card-gap: 20px;
+  --card-gap: 16px;
   --border-subtle: #e2e8f0;
   --border-focus: #0891b2;
 
-  --page-bg: #e8f4fa;
-  --page-bg-end: #f1f5f9;
-
+  /* Text on white cards */
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
+
+  /* Text on ocean background (footer, etc.) */
+  --text-on-sea: rgba(255, 255, 255, 0.72);
+  --text-on-sea-muted: rgba(255, 255, 255, 0.5);
 
   --accent: #0891b2;
   --accent-hover: #0e7490;
   --accent-soft: #e0f2fe;
   --accent-text: #ffffff;
+
+  --icon-stroke: 1.75;
+  --icon-size: 22px;
 
   --danger: #dc2626;
   --danger-bg: #fef2f2;

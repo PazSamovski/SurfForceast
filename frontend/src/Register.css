@@ -21,7 +21,7 @@
   -webkit-overflow-scrolling: touch;
   font-family: var(--font);
   color: var(--text-primary);
-  background: linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-end) 100%);
+  background: var(--page-gradient);
 }
 
 .register-card {

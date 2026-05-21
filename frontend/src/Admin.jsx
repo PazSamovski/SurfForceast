@@ -5,6 +5,8 @@ import './Admin.css';
 
 const ADMIN_USERS_API = '/api/admin/users';
 const APPROVE_USER_API = '/api/approve-user';
+const ADMIN_FORECAST_API = '/api/admin/forecast';
+const FORECAST_API = '/api/forecast';
 
 function IconWave() {
   return (
@@ -21,6 +23,10 @@ function AdminDashboard({ username, onLogout }) {
   const [error, setError] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [forecastText, setForecastText] = useState('');
+  const [forecastSaving, setForecastSaving] = useState(false);
+  const [forecastMessage, setForecastMessage] = useState(null);
+  const [forecastError, setForecastError] = useState(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -43,9 +49,78 @@ function AdminDashboard({ username, onLogout }) {
     }
   }, []);
 
+  const fetchForecast = useCallback(async () => {
+    try {
+      const res = await fetch(FORECAST_API);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Unable to load forecast.');
+      }
+      setForecastText(data.forecast?.text ?? '');
+    } catch {
+      setForecastText('');
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchForecast();
+  }, [fetchUsers, fetchForecast]);
+
+  const handleSaveForecast = async (e) => {
+    e.preventDefault();
+    setForecastSaving(true);
+    setForecastError(null);
+    setForecastMessage(null);
+
+    try {
+      const res = await fetch(ADMIN_FORECAST_API, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ text: forecastText }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Unable to save forecast.');
+      }
+
+      setForecastMessage(data.message || 'Forecast saved.');
+      setForecastText(data.forecast?.text ?? '');
+    } catch (err) {
+      setForecastError(err.message);
+    } finally {
+      setForecastSaving(false);
+    }
+  };
+
+  const handleClearForecast = async () => {
+    setForecastSaving(true);
+    setForecastError(null);
+    setForecastMessage(null);
+
+    try {
+      const res = await fetch(ADMIN_FORECAST_API, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ text: '' }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Unable to clear forecast.');
+      }
+
+      setForecastText('');
+      setForecastMessage(data.message || 'Forecast cleared.');
+    } catch (err) {
+      setForecastError(err.message);
+    } finally {
+      setForecastSaving(false);
+    }
+  };
 
   const handleApprove = async (userId) => {
     setApprovingId(userId);
@@ -113,6 +188,64 @@ function AdminDashboard({ username, onLogout }) {
         </header>
 
         <main className="main">
+          <section className="glass admin-forecast" aria-labelledby="admin-forecast-heading">
+            <div className="admin-forecast__header">
+              <div>
+                <h2 id="admin-forecast-heading" className="admin-forecast__title">
+                  Manager&apos;s daily forecast
+                </h2>
+                <p className="admin-forecast__subtitle">
+                  Publish a short update for all surfers. Leave empty and save to hide it from the dashboard.
+                </p>
+              </div>
+            </div>
+
+            {forecastError && (
+              <p className="admin-panel__error" role="alert">
+                {forecastError}
+              </p>
+            )}
+
+            {forecastMessage && (
+              <p className="admin-forecast__success" role="status">
+                {forecastMessage}
+              </p>
+            )}
+
+            <form className="admin-forecast__form" onSubmit={handleSaveForecast}>
+              <label className="admin-forecast__field" htmlFor="manager-forecast-text">
+                <span className="admin-forecast__label">Today&apos;s message</span>
+                <textarea
+                  id="manager-forecast-text"
+                  className="admin-forecast__textarea"
+                  value={forecastText}
+                  onChange={(e) => setForecastText(e.target.value)}
+                  placeholder="e.g. Conditions are looking clean at Poleg, go early!"
+                  rows={4}
+                  maxLength={2000}
+                  disabled={forecastSaving}
+                />
+              </label>
+              <div className="admin-forecast__actions">
+                <button
+                  type="submit"
+                  className="admin-forecast__save"
+                  disabled={forecastSaving}
+                >
+                  {forecastSaving ? 'Saving…' : 'Publish forecast'}
+                </button>
+                <button
+                  type="button"
+                  className="admin-forecast__clear"
+                  onClick={handleClearForecast}
+                  disabled={forecastSaving || !forecastText.trim()}
+                >
+                  Clear
+                </button>
+              </div>
+            </form>
+          </section>
+
           <section className="glass admin-panel" aria-labelledby="admin-heading">
             <div className="admin-panel__header">
               <div>
