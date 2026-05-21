@@ -23,10 +23,10 @@ const ManagerForecast = require('./models/ManagerForecast');
 const PushSubscription = require('./models/PushSubscription');
 const {
   ensureVapidKeys,
-  getPublicKey,
   isVapidConfigured,
   sendPushNotification,
 } = require('./lib/webPush');
+const notificationsRoutes = require('./routes/notifications');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -707,18 +707,7 @@ function formatPushSubscriptionDoc(doc) {
   };
 }
 
-app.get('/api/notifications/vapid-public-key', (req, res) => {
-  if (!isVapidConfigured()) {
-    return res.status(503).json({
-      error: true,
-      message: 'Push notifications are not configured on the server.',
-    });
-  }
-
-  res.json({
-    publicKey: getPublicKey(),
-  });
-});
+app.use('/api/notifications', notificationsRoutes);
 
 app.get('/api/notifications/status', authMiddleware, async (req, res) => {
   try {

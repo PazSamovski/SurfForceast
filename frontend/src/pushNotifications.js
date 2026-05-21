@@ -1,13 +1,45 @@
 import { getAuthHeaders } from './auth';
 
+function normalizeVapidPublicKey(key) {
+  if (key == null) return '';
+  let s = String(key).trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s.replace(/\s+/g, '');
+}
+
+/**
+ * Decode a VAPID / applicationServerKey from base64url to Uint8Array (65-byte P-256 point).
+ */
 function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
+  const normalized = normalizeVapidPublicKey(base64String);
+  if (!normalized) {
+    throw new Error('VAPID public key is missing.');
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) {
+    throw new Error(
+      'Invalid VAPID public key format. Expected base64url (no +, /, spaces, or quotes).'
+    );
+  }
+
+  const padding = '='.repeat((4 - (normalized.length % 4)) % 4);
+  const standard = (normalized + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(standard);
   const output = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) {
     output[i] = raw.charCodeAt(i);
   }
+
+  if (output.length !== 65 || output[0] !== 0x04) {
+    throw new Error(
+      'VAPID public key is not a valid P-256 key. Use the public key from `npx web-push generate-vapid-keys` (not the private key).'
+    );
+  }
+
   return output;
 }
 
@@ -32,23 +64,41 @@ export async function subscribeToPushNotifications() {
   }
 
   const keyRes = await fetch('/api/notifications/vapid-public-key');
+  const keyPayload = await keyRes.json().catch(() => ({}));
+
   if (!keyRes.ok) {
-    throw new Error('Unable to load push configuration.');
+    throw new Error(
+      keyPayload.message || 'Unable to load push configuration.'
+    );
   }
-  const { publicKey } = await keyRes.json();
+
+  const publicKey = normalizeVapidPublicKey(keyPayload.publicKey);
+  console.log('[push] VAPID publicKey from API:', publicKey || '(undefined)');
+
   if (!publicKey) {
-    throw new Error('Push is not configured on the server.');
+    throw new Error('Push is not configured on the server (publicKey missing).');
+  }
+
+  let applicationServerKey;
+  try {
+    applicationServerKey = urlBase64ToUint8Array(publicKey);
+  } catch (err) {
+    console.error('[push] Failed to decode VAPID publicKey:', err.message);
+    throw err;
   }
 
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
 
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
-    });
+  if (subscription) {
+    await subscription.unsubscribe();
+    subscription = null;
   }
+
+  subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey,
+  });
 
   const res = await fetch('/api/notifications/subscribe', {
     method: 'POST',
