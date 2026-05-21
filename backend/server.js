@@ -28,6 +28,41 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Only this email may approve users — set ADMIN_EMAIL in .env to your address
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+
+function formatUserResponse(user) {
+  return {
+    id: user._id.toString(),
+    username: user.username,
+    email: user.email,
+    isApproved: Boolean(user.isApproved),
+  };
+}
+
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: true,
+      message: 'Authentication required.',
+    });
+  }
+
+  try {
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch {
+    return res.status(401).json({
+      error: true,
+      message: 'Invalid or expired session. Please log in again.',
+    });
+  }
+}
+
 const SPOTS = {
   netanya: {
     beach: 'Netanya',
@@ -53,8 +88,8 @@ const SPOTS = {
 
 const DEFAULT_SPOT_KEY = 'netanya';
 const ISRAEL_TZ = 'Asia/Jerusalem';
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist');
+const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
+const FRONTEND_DIST = path.resolve(__dirname, '..', 'frontend', 'dist');
 const CHAT_SPOT_NAMES = ['Netanya', 'Tel Aviv', 'Haifa', 'Ashdod'];
 
 cloudinary.config({
@@ -302,6 +337,7 @@ app.post('/api/register', async (req, res) => {
       username: trimmedUsername,
       email: trimmedEmail,
       password: hashedPassword,
+      isApproved: false,
     });
 
     const token = jwt.sign(
@@ -311,13 +347,10 @@ app.post('/api/register', async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Account created successfully.',
+      message:
+        'Account created. Waiting for admin approval before you can access the app.',
       token,
-      user: {
-        id: user._id.toString(),
-        username: user.username,
-        email: user.email,
-      },
+      user: formatUserResponse(user),
     });
   } catch (err) {
     if (err.code === 11000) {
@@ -332,6 +365,87 @@ app.post('/api/register', async (req, res) => {
     res.status(500).json({
       error: true,
       message: 'Unable to create account. Please try again.',
+    });
+  }
+});
+
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found.',
+      });
+    }
+
+    res.json({ user: formatUserResponse(user) });
+  } catch (err) {
+    console.error('GET /api/auth/me error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to verify account status.',
+    });
+  }
+});
+
+app.post('/api/approve-user', authMiddleware, async (req, res) => {
+  try {
+    if (!ADMIN_EMAIL) {
+      return res.status(500).json({
+        error: true,
+        message: 'ADMIN_EMAIL is not configured on the server.',
+      });
+    }
+
+    const admin = await User.findById(req.userId).select('-password');
+
+    if (!admin) {
+      return res.status(404).json({
+        error: true,
+        message: 'Admin user not found.',
+      });
+    }
+
+    if (admin.email.toLowerCase() !== ADMIN_EMAIL) {
+      return res.status(403).json({
+        error: true,
+        message: 'Only the authorized admin can approve users.',
+      });
+    }
+
+    const { userId, isApproved = true } = req.body ?? {};
+
+    if (!userId) {
+      return res.status(400).json({
+        error: true,
+        message: 'userId is required.',
+      });
+    }
+
+    const targetUser = await User.findByIdAndUpdate(
+      userId,
+      { isApproved: Boolean(isApproved) },
+      { new: true }
+    ).select('-password');
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: true,
+        message: 'User to approve was not found.',
+      });
+    }
+
+    res.json({
+      message: `User ${targetUser.username} approval set to ${Boolean(isApproved)}.`,
+      user: formatUserResponse(targetUser),
+    });
+  } catch (err) {
+    console.error('POST /api/approve-user error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to update user approval status.',
     });
   }
 });
@@ -498,10 +612,16 @@ async function startServer() {
     process.exit(1);
   }
 
+  if (!ADMIN_EMAIL) {
+    console.warn('Warning: ADMIN_EMAIL is not set. POST /api/approve-user will not work.');
+  }
+
+  const indexPath = path.join(FRONTEND_DIST, 'index.html');
   try {
-    await fs.access(path.join(FRONTEND_DIST, 'index.html'));
+    await fs.access(indexPath);
   } catch {
-    console.error('Frontend build not found. Run: cd frontend && npm run build');
+    console.error('Frontend build not found at:', indexPath);
+    console.error('From repo root run: npm run build');
     process.exit(1);
   }
 

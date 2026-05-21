@@ -58,7 +58,7 @@ function Register({ onSuccess, onBack }) {
         localStorage.setItem('surfToken', data.token);
       }
       if (data.user?.username) {
-        localStorage.setItem('surfUsername', data.user.username);
+        localStorage.setItem('username', data.user.username);
       }
 
       setSuccess(data.message || 'Account created successfully!');
@@ -68,7 +68,9 @@ function Register({ onSuccess, onBack }) {
       setConfirmPassword('');
 
       if (onSuccess) {
-        setTimeout(() => onSuccess(data), 1200);
+        setTimeout(() => onSuccess(data), 800);
+      } else {
+        setTimeout(() => window.location.reload(), 800);
       }
     } catch (err) {
       setError(err.message);
@@ -80,9 +82,11 @@ function Register({ onSuccess, onBack }) {
   return (
     <div className="register-page">
       <div className="register-card">
-        <button type="button" className="register-back" onClick={onBack}>
-          ← Back to dashboard
-        </button>
+        {onBack && (
+          <button type="button" className="register-back" onClick={onBack}>
+            ← Back to dashboard
+          </button>
+        )}
 
         <div className="register-header">
           <h2 className="register-title">Create account</h2>

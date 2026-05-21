@@ -4,7 +4,13 @@ import './App.css';
 
 const API_BASE = '/api/surf';
 const CHAT_API = '/api/chat';
+const AUTH_ME_API = '/api/auth/me';
 const DEFAULT_CHAT_USER = 'Local Surfer';
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('surfToken');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 const SPOTS = [
   { id: 'Netanya', label: 'Netanya' },
@@ -269,17 +275,72 @@ function MetricTile({ metric }) {
   );
 }
 
+function handleLogout() {
+  localStorage.removeItem('username');
+  localStorage.removeItem('surfToken');
+  localStorage.removeItem('surfUsername');
+  window.location.reload();
+}
+
+function PendingApproval({ username, onLogout, onRefresh, checking }) {
+  return (
+    <div className="app">
+      <div className="app__bg" aria-hidden="true">
+        <div className="app__glow app__glow--1" />
+        <div className="app__glow app__glow--2" />
+        <div className="app__shimmer" />
+      </div>
+      <div className="shell">
+        <header className="topbar">
+          <div className="topbar__brand">
+            <span className="topbar__mark" aria-hidden="true">
+              <IconWave />
+            </span>
+            <div>
+              <p className="topbar__eyebrow">SurfForceast</p>
+              <h1 className="topbar__title">Surf & Weather</h1>
+              <p className="topbar__greeting">Hello, {username}</p>
+            </div>
+          </div>
+          <div className="topbar__actions">
+            <button type="button" className="topbar__logout-btn" onClick={onLogout}>
+              Logout
+            </button>
+          </div>
+        </header>
+        <main className="main">
+          <section className="glass glass--centered auth-pending" aria-live="polite">
+            <h2 className="auth-pending__title">Waiting for Admin Approval</h2>
+            <p className="auth-pending__text">
+              Your account is registered. An admin must approve your access before you
+              can use the dashboard and chat.
+            </p>
+            <button
+              type="button"
+              className="auth-pending__refresh"
+              onClick={onRefresh}
+              disabled={checking}
+            >
+              {checking ? 'Checking…' : 'Check status again'}
+            </button>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [view, setView] = useState('dashboard');
+  const [authView, setAuthView] = useState('checking');
+  const [authRefreshing, setAuthRefreshing] = useState(false);
+  const username = localStorage.getItem('username');
+
   const [currentSpot, setCurrentSpot] = useState('Netanya');
   const [surf, setSurf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [chatUser, setChatUser] = useState(
-    () => localStorage.getItem('surfUsername') || DEFAULT_CHAT_USER
-  );
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
@@ -290,6 +351,45 @@ function App() {
   const isFirstLoad = useRef(true);
   const chatEndRef = useRef(null);
   const imageInputRef = useRef(null);
+
+  const checkAuthStatus = useCallback(async () => {
+    const token = localStorage.getItem('surfToken');
+    const storedUsername = localStorage.getItem('username');
+
+    setAuthRefreshing(true);
+
+    if (!token || !storedUsername) {
+      setAuthView('guest');
+      setAuthRefreshing(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(AUTH_ME_API, { headers: getAuthHeaders() });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Session expired');
+      }
+
+      if (data.user?.isApproved) {
+        setAuthView('approved');
+      } else {
+        setAuthView('pending');
+      }
+    } catch {
+      localStorage.removeItem('username');
+      localStorage.removeItem('surfToken');
+      localStorage.removeItem('surfUsername');
+      setAuthView('guest');
+    } finally {
+      setAuthRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, [checkAuthStatus]);
 
   const fetchSurf = useCallback(async (spot, { isInitial = false } = {}) => {
     if (isInitial) {
@@ -322,9 +422,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (authView !== 'approved') return;
     fetchSurf(currentSpot, { isInitial: isFirstLoad.current });
     isFirstLoad.current = false;
-  }, [currentSpot, fetchSurf]);
+  }, [currentSpot, fetchSurf, authView]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), TICK_MS);
@@ -332,6 +433,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (authView !== 'approved') return;
+
     let cancelled = false;
 
     async function fetchChat() {
@@ -367,11 +470,12 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentSpot]);
+  }, [currentSpot, authView]);
 
   useEffect(() => {
+    if (authView !== 'approved') return;
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentSpot]);
+  }, [messages, currentSpot, authView]);
 
   useEffect(() => {
     return () => {
@@ -414,7 +518,8 @@ function App() {
     e.preventDefault();
 
     const trimmedMessage = chatInput.trim();
-    const trimmedUser = chatUser.trim() || DEFAULT_CHAT_USER;
+    const storedUsername =
+      localStorage.getItem('username')?.trim() || DEFAULT_CHAT_USER;
 
     if (!canSend || sending) return;
 
@@ -422,7 +527,7 @@ function App() {
     const optimisticMessage = {
       id: optimisticId,
       spot: currentSpot,
-      user: trimmedUser,
+      user: storedUsername,
       message: trimmedMessage,
       timestamp: new Date().toISOString(),
       ...(imagePreviewUrl && { imageUrl: imagePreviewUrl }),
@@ -435,7 +540,7 @@ function App() {
 
     const formData = new FormData();
     formData.append('spot', currentSpot);
-    formData.append('user', trimmedUser);
+    formData.append('user', storedUsername);
     formData.append('message', trimmedMessage);
     if (imageFile) {
       formData.append('image', imageFile);
@@ -480,6 +585,56 @@ function App() {
   const showDashboard = Boolean(surf);
   const showErrorOnly = error && !surf;
 
+  if (authView === 'checking') {
+    return (
+      <div className="app">
+        <div className="app__bg" aria-hidden="true">
+          <div className="app__glow app__glow--1" />
+          <div className="app__glow app__glow--2" />
+          <div className="app__shimmer" />
+        </div>
+        <div className="shell">
+          <main className="main">
+            <section className="glass glass--centered" aria-busy="true">
+              <div className="loader">
+                <div className="loader__ring" />
+                <p className="loader__text">Checking account…</p>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (authView === 'guest') {
+    return (
+      <div className="app">
+        <div className="app__bg" aria-hidden="true">
+          <div className="app__glow app__glow--1" />
+          <div className="app__glow app__glow--2" />
+          <div className="app__shimmer" />
+        </div>
+        <div className="shell">
+          <main className="main">
+            <Register onSuccess={() => window.location.reload()} />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (authView === 'pending') {
+    return (
+      <PendingApproval
+        username={username}
+        onLogout={handleLogout}
+        onRefresh={checkAuthStatus}
+        checking={authRefreshing}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <div className="app__bg" aria-hidden="true">
@@ -497,18 +652,17 @@ function App() {
             <div>
               <p className="topbar__eyebrow">SurfForceast</p>
               <h1 className="topbar__title">Surf & Weather</h1>
+              <p className="topbar__greeting">Hello, {username}</p>
             </div>
           </div>
           <div className="topbar__actions">
-            {view === 'dashboard' && (
-              <button
-                type="button"
-                className="topbar__auth-btn"
-                onClick={() => setView('register')}
-              >
-                Register
-              </button>
-            )}
+            <button
+              type="button"
+              className="topbar__logout-btn"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
             <div className="topbar__status">
               <time className="topbar__clock" dateTime={now.toISOString()}>
                 {israelClock}
@@ -524,19 +678,7 @@ function App() {
         </header>
 
         <main className="main">
-          {view === 'register' && (
-            <Register
-              onBack={() => setView('dashboard')}
-              onSuccess={(data) => {
-                if (data?.user?.username) {
-                  setChatUser(data.user.username);
-                }
-                setView('dashboard');
-              }}
-            />
-          )}
-
-          {view === 'dashboard' && showInitialLoader && (
+          {showInitialLoader && (
             <section className="glass glass--centered" aria-busy="true" aria-label="Loading">
               <div className="loader">
                 <div className="loader__ring" />
@@ -545,7 +687,7 @@ function App() {
             </section>
           )}
 
-          {view === 'dashboard' && showErrorOnly && (
+          {showErrorOnly && (
             <section className="glass glass--centered glass--error" role="alert">
               <p className="glass__error-title">Unable to load surf data</p>
               <p className="glass__error-detail">{error}</p>
@@ -553,7 +695,7 @@ function App() {
             </section>
           )}
 
-          {view === 'dashboard' && showDashboard && (
+          {showDashboard && (
             <section
               className={`glass ${refreshing ? 'glass--refreshing' : ''}`}
               aria-label="Beach conditions"
@@ -698,18 +840,9 @@ function App() {
                 )}
 
                 <form className="chat__form" onSubmit={handleSendMessage}>
-                  <label className="chat__field chat__field--name">
-                    <span className="chat__label">Your name</span>
-                    <input
-                      type="text"
-                      className="chat__input"
-                      value={chatUser}
-                      onChange={(e) => setChatUser(e.target.value)}
-                      placeholder={DEFAULT_CHAT_USER}
-                      maxLength={40}
-                      disabled={sending}
-                    />
-                  </label>
+                  <p className="chat__posting-as">
+                    Posting as <strong>{username}</strong>
+                  </p>
 
                   {imagePreviewUrl && imageFile && (
                     <div className="chat__preview">
@@ -792,7 +925,7 @@ function App() {
             </section>
           )}
 
-          {view === 'dashboard' && error && surf && (
+          {error && surf && (
             <p className="glass__inline-error" role="alert">
               Could not refresh {currentSpot}: {error}
             </p>

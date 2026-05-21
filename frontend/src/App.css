@@ -154,6 +154,33 @@
   line-height: 1.2;
 }
 
+.topbar__greeting {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+}
+
+.topbar__logout-btn {
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.topbar__logout-btn:hover {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(127, 29, 29, 0.25);
+}
+
 .topbar__actions {
   display: flex;
   align-items: center;
@@ -882,6 +909,57 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.chat__posting-as {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.chat__posting-as strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ─── Auth pending ─── */
+.auth-pending {
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.auth-pending__title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+  color: #fde68a;
+}
+
+.auth-pending__text {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.auth-pending__refresh {
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #031a2b;
+  background: linear-gradient(135deg, var(--accent) 0%, #a5f3fc 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+}
+
+.auth-pending__refresh:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .chat__field {
