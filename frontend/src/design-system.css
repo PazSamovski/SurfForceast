@@ -1,0 +1,43 @@
+/* SurfForceast — card-based design tokens */
+:root {
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --card-bg: #ffffff;
+  --card-bg-muted: #f8fafc;
+  --card-radius: 16px;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --card-padding: 20px;
+  --card-gap: 20px;
+  --border-subtle: #e2e8f0;
+  --border-focus: #0891b2;
+
+  --page-bg: #e8f4fa;
+  --page-bg-end: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --accent: #0891b2;
+  --accent-hover: #0e7490;
+  --accent-soft: #e0f2fe;
+  --accent-text: #ffffff;
+
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+
+  --success: #059669;
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+}
+
+.card {
+  background-color: var(--card-bg);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: var(--card-padding);
+}
