@@ -20,6 +20,13 @@ const ChatMessage = require('./models/ChatMessage');
 const User = require('./models/User');
 const PasswordResetToken = require('./models/PasswordResetToken');
 const ManagerForecast = require('./models/ManagerForecast');
+const PushSubscription = require('./models/PushSubscription');
+const {
+  ensureVapidKeys,
+  getPublicKey,
+  isVapidConfigured,
+  sendPushNotification,
+} = require('./lib/webPush');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -689,6 +696,156 @@ app.post('/api/admin/forecast', authMiddleware, async (req, res) => {
   }
 });
 
+function formatPushSubscriptionDoc(doc) {
+  return {
+    endpoint: doc.endpoint,
+    expirationTime: doc.expirationTime ?? null,
+    keys: {
+      p256dh: doc.keys.p256dh,
+      auth: doc.keys.auth,
+    },
+  };
+}
+
+app.get('/api/notifications/vapid-public-key', (req, res) => {
+  if (!isVapidConfigured()) {
+    return res.status(503).json({
+      error: true,
+      message: 'Push notifications are not configured on the server.',
+    });
+  }
+
+  res.json({
+    publicKey: getPublicKey(),
+  });
+});
+
+app.get('/api/notifications/status', authMiddleware, async (req, res) => {
+  try {
+    const subscription = await PushSubscription.findOne({ userId: req.userId });
+    res.json({ subscribed: Boolean(subscription) });
+  } catch (err) {
+    console.error('GET /api/notifications/status error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to check notification status.',
+    });
+  }
+});
+
+app.post('/api/notifications/subscribe', authMiddleware, async (req, res) => {
+  try {
+    const raw = req.body?.subscription ?? req.body;
+    const endpoint = String(raw?.endpoint ?? '').trim();
+    const p256dh = String(raw?.keys?.p256dh ?? '').trim();
+    const auth = String(raw?.keys?.auth ?? '').trim();
+    const expirationTime = raw?.expirationTime ?? null;
+
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({
+        error: true,
+        message: 'Valid push subscription (endpoint and keys) is required.',
+      });
+    }
+
+    await PushSubscription.findOneAndUpdate(
+      { endpoint },
+      {
+        userId: req.userId,
+        endpoint,
+        expirationTime,
+        keys: { p256dh, auth },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({
+      message: 'Push notifications enabled.',
+      subscribed: true,
+    });
+  } catch (err) {
+    console.error('POST /api/notifications/subscribe error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to save push subscription.',
+    });
+  }
+});
+
+app.post('/api/notifications/send', authMiddleware, async (req, res) => {
+  try {
+    const adminCheck = await requireAdminUser(req.userId);
+
+    if (adminCheck.error) {
+      return res.status(adminCheck.error.status).json({
+        error: true,
+        message: adminCheck.error.message,
+      });
+    }
+
+    const title = String(req.body?.title ?? 'SurfForceast').trim() || 'SurfForceast';
+    const body = String(req.body?.body ?? req.body?.message ?? '').trim();
+
+    if (!body) {
+      return res.status(400).json({
+        error: true,
+        message: 'Notification message is required.',
+      });
+    }
+
+    if (!isVapidConfigured()) {
+      return res.status(503).json({
+        error: true,
+        message: 'Push notifications are not configured. Set VAPID keys on the server.',
+      });
+    }
+
+    const subscriptions = await PushSubscription.find();
+    const payload = {
+      title,
+      body,
+      url: '/',
+      icon: '/icons/icon-192.png',
+    };
+
+    let sent = 0;
+    let failed = 0;
+    const staleEndpoints = [];
+
+    await Promise.all(
+      subscriptions.map(async (doc) => {
+        const subscription = formatPushSubscriptionDoc(doc);
+        try {
+          await sendPushNotification(subscription, payload);
+          sent += 1;
+        } catch (err) {
+          failed += 1;
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            staleEndpoints.push(doc.endpoint);
+          }
+        }
+      })
+    );
+
+    if (staleEndpoints.length > 0) {
+      await PushSubscription.deleteMany({ endpoint: { $in: staleEndpoints } });
+    }
+
+    res.json({
+      message: `Notification sent to ${sent} subscriber${sent !== 1 ? 's' : ''}.`,
+      sent,
+      failed,
+      total: subscriptions.length,
+    });
+  } catch (err) {
+    console.error('POST /api/notifications/send error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to send notifications.',
+    });
+  }
+});
+
 app.get('/api/admin/users', authMiddleware, async (req, res) => {
   try {
     const adminCheck = await requireAdminUser(req.userId);
@@ -939,6 +1096,7 @@ async function startServer() {
 
   await mongoose.connect(MONGODB_URI.trim(), { serverSelectionTimeoutMS: 10000 });
   console.log('MongoDB connected successfully');
+  ensureVapidKeys();
   await ensureUploadsDir();
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
