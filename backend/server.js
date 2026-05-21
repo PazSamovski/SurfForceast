@@ -10,10 +10,13 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const fs = require('fs').promises;
 const ChatMessage = require('./models/ChatMessage');
+const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +25,8 @@ const PORT = process.env.PORT || 3000;
 dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
 
 const MONGODB_URI = process.env.MONGODB_URI;
+const JWT_SECRET = process.env.JWT_SECRET;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SPOTS = {
   netanya: {
@@ -243,6 +248,94 @@ async function fetchWeatherData(spot) {
   return data?.current ?? null;
 }
 
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body ?? {};
+    const trimmedUsername = String(username ?? '').trim();
+    const trimmedEmail = String(email ?? '').trim().toLowerCase();
+    const trimmedPassword = String(password ?? '');
+
+    if (!trimmedUsername || !trimmedEmail || !trimmedPassword) {
+      return res.status(400).json({
+        error: true,
+        message: 'Username, email, and password are required.',
+      });
+    }
+
+    if (trimmedUsername.length < 3) {
+      return res.status(400).json({
+        error: true,
+        message: 'Username must be at least 3 characters.',
+      });
+    }
+
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      return res.status(400).json({
+        error: true,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({
+        error: true,
+        message: 'Password must be at least 6 characters.',
+      });
+    }
+
+    const existingUser = await User.findOne({
+      $or: [{ email: trimmedEmail }, { username: trimmedUsername }],
+    });
+
+    if (existingUser) {
+      const field =
+        existingUser.email === trimmedEmail ? 'Email' : 'Username';
+      return res.status(409).json({
+        error: true,
+        message: `${field} is already registered.`,
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
+
+    const user = await User.create({
+      username: trimmedUsername,
+      email: trimmedEmail,
+      password: hashedPassword,
+    });
+
+    const token = jwt.sign(
+      { userId: user._id.toString(), username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'Account created successfully.',
+      token,
+      user: {
+        id: user._id.toString(),
+        username: user.username,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      const field = err.keyPattern?.email ? 'Email' : 'Username';
+      return res.status(409).json({
+        error: true,
+        message: `${field} is already registered.`,
+      });
+    }
+
+    console.error('POST /api/register error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to create account. Please try again.',
+    });
+  }
+});
+
 app.get('/api/surf', async (req, res) => {
   const spot = resolveSpot(req.query.spot);
 
@@ -397,6 +490,11 @@ app.get('*', (req, res, next) => {
 async function startServer() {
   if (!MONGODB_URI) {
     console.error('MONGODB_URI is required. Set it in backend/.env (see .env.example).');
+    process.exit(1);
+  }
+
+  if (!JWT_SECRET) {
+    console.error('JWT_SECRET is required. Set it in backend/.env (see .env.example).');
     process.exit(1);
   }
 

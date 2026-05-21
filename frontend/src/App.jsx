@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Register from './Register.jsx';
 import './App.css';
 
 const API_BASE = '/api/surf';
@@ -269,13 +270,16 @@ function MetricTile({ metric }) {
 }
 
 function App() {
+  const [view, setView] = useState('dashboard');
   const [currentSpot, setCurrentSpot] = useState('Netanya');
   const [surf, setSurf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [chatUser, setChatUser] = useState(DEFAULT_CHAT_USER);
+  const [chatUser, setChatUser] = useState(
+    () => localStorage.getItem('surfUsername') || DEFAULT_CHAT_USER
+  );
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
@@ -495,21 +499,44 @@ function App() {
               <h1 className="topbar__title">Surf & Weather</h1>
             </div>
           </div>
-          <div className="topbar__status">
-            <time className="topbar__clock" dateTime={now.toISOString()}>
-              {israelClock}
-            </time>
-            <span className="topbar__tz">Israel</span>
-            <span className="topbar__status-divider" aria-hidden="true" />
-            <span className="topbar__live">
-              <span className="topbar__dot" />
-              Live
-            </span>
+          <div className="topbar__actions">
+            {view === 'dashboard' && (
+              <button
+                type="button"
+                className="topbar__auth-btn"
+                onClick={() => setView('register')}
+              >
+                Register
+              </button>
+            )}
+            <div className="topbar__status">
+              <time className="topbar__clock" dateTime={now.toISOString()}>
+                {israelClock}
+              </time>
+              <span className="topbar__tz">Israel</span>
+              <span className="topbar__status-divider" aria-hidden="true" />
+              <span className="topbar__live">
+                <span className="topbar__dot" />
+                Live
+              </span>
+            </div>
           </div>
         </header>
 
         <main className="main">
-          {showInitialLoader && (
+          {view === 'register' && (
+            <Register
+              onBack={() => setView('dashboard')}
+              onSuccess={(data) => {
+                if (data?.user?.username) {
+                  setChatUser(data.user.username);
+                }
+                setView('dashboard');
+              }}
+            />
+          )}
+
+          {view === 'dashboard' && showInitialLoader && (
             <section className="glass glass--centered" aria-busy="true" aria-label="Loading">
               <div className="loader">
                 <div className="loader__ring" />
@@ -518,7 +545,7 @@ function App() {
             </section>
           )}
 
-          {showErrorOnly && (
+          {view === 'dashboard' && showErrorOnly && (
             <section className="glass glass--centered glass--error" role="alert">
               <p className="glass__error-title">Unable to load surf data</p>
               <p className="glass__error-detail">{error}</p>
@@ -526,7 +553,7 @@ function App() {
             </section>
           )}
 
-          {showDashboard && (
+          {view === 'dashboard' && showDashboard && (
             <section
               className={`glass ${refreshing ? 'glass--refreshing' : ''}`}
               aria-label="Beach conditions"
@@ -765,7 +792,7 @@ function App() {
             </section>
           )}
 
-          {error && surf && (
+          {view === 'dashboard' && error && surf && (
             <p className="glass__inline-error" role="alert">
               Could not refresh {currentSpot}: {error}
             </p>
