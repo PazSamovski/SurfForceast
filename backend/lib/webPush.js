@@ -1,8 +1,4 @@
 const webpush = require('web-push');
-const {
-  normalizeVapidPublicKey,
-  isValidP256ApplicationServerKey,
-} = require('./vapidKey');
 
 let publicKey = '';
 let privateKey = '';
@@ -26,21 +22,13 @@ function ensureVapidKeys() {
   const { envPublic, envPrivate, subject } = readVapidFromEnv();
 
   if (envPublic && envPrivate) {
-    publicKey = normalizeVapidPublicKey(envPublic);
-    privateKey = normalizeVapidPublicKey(envPrivate);
+    publicKey = envPublic;
+    privateKey = envPrivate;
     vapidSubject = subject;
     configuredFromEnv = true;
-
-    if (!isValidP256ApplicationServerKey(publicKey)) {
-      console.error(
-        'Web Push: VAPID_PUBLIC_KEY is not a valid P-256 application server key (65-byte uncompressed point as base64url).'
-      );
-      configuredFromEnv = false;
-    } else {
-      webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
-      console.log('Web Push: VAPID keys loaded from environment (VAPID_SUBJECT).');
-      return { publicKey, privateKey, subject: vapidSubject, configuredFromEnv: true };
-    }
+    webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
+    console.log('Web Push: VAPID keys loaded from environment (VAPID_SUBJECT).');
+    return { publicKey, privateKey, subject: vapidSubject, configuredFromEnv: true };
   }
 
   const generated = webpush.generateVAPIDKeys();
