@@ -609,6 +609,10 @@
   .metrics-grid {
     grid-template-columns: repeat(5, 1fr);
   }
+
+  .metric--wave {
+    grid-column: 1 / -1;
+  }
 }
 
 .metric {
@@ -699,6 +703,65 @@
 .metric__unit--muted {
   color: var(--text-muted);
   opacity: 0.6;
+}
+
+.metric--wave {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  flex-direction: row;
+  padding: 1rem 1.1rem;
+}
+
+.metric--wave.metric--live {
+  background: linear-gradient(
+    135deg,
+    rgba(110, 231, 247, 0.12) 0%,
+    rgba(255, 255, 255, 0.06) 55%
+  );
+}
+
+.metric--wave.metric--live .metric__wave-visual {
+  border-color: rgba(110, 231, 247, 0.45);
+  box-shadow: 0 4px 24px rgba(110, 231, 247, 0.2);
+}
+
+.metric__wave-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(110, 231, 247, 0.25);
+  overflow: hidden;
+}
+
+.metric__wave-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.metric__wave-genre {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.metric__wave-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 /* ─── Loader ─── */

@@ -266,8 +266,18 @@ function formatValue(value, formatter) {
   return formatter(value);
 }
 
+function getWaveGenre(waveHeightMeters) {
+  if (waveHeightMeters == null || Number.isNaN(waveHeightMeters)) {
+    return null;
+  }
+  if (waveHeightMeters < 1) return 'Small';
+  if (waveHeightMeters <= 2) return 'Medium';
+  return 'Big';
+}
+
 function buildSurfPayload(spot, marineCurrent, weatherCurrent) {
-  const waveHeight = marineCurrent?.wave_height;
+  const waveHeightMeters = marineCurrent?.wave_height ?? null;
+  const waveGenre = getWaveGenre(waveHeightMeters);
   const swellPeriod = marineCurrent?.swell_wave_period;
   const swellDirection = marineCurrent?.swell_wave_direction;
   const windSpeed = weatherCurrent?.wind_speed_10m;
@@ -279,7 +289,9 @@ function buildSurfPayload(spot, marineCurrent, weatherCurrent) {
     spot: spot.key,
     latitude: spot.latitude,
     longitude: spot.longitude,
-    waveHeight: formatValue(waveHeight, (v) => `${v.toFixed(1)} m`),
+    waveHeightMeters,
+    waveGenre,
+    waveHeight: formatValue(waveHeightMeters, (v) => `${v.toFixed(1)} m`),
     swellPeriod: formatValue(swellPeriod, (v) => v.toFixed(1)),
     swellDirection: formatValue(swellDirection, (v) => {
       const compass = degreesToCompass(v);

@@ -3,13 +3,13 @@ import { BrowserRouter, Navigate, Route, Routes, Link } from 'react-router-dom';
 import Register from './Register.jsx';
 import AdminDashboard from './Admin.jsx';
 import ResetPassword from './ResetPassword.jsx';
+import ChatWidget from './ChatWidget.jsx';
 import { getAuthHeaders } from './auth.js';
+import { getWaveGenreImageUrl, WAVE_GENRES } from './waveGenres.js';
 import './App.css';
 
 const API_BASE = '/api/surf';
-const CHAT_API = '/api/chat';
 const AUTH_ME_API = '/api/auth/me';
-const DEFAULT_CHAT_USER = 'Local Surfer';
 
 const SPOTS = [
   { id: 'Netanya', label: 'Netanya' },
@@ -82,23 +82,6 @@ function IconChevron() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function IconChat() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-
-function IconCamera() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-      <circle cx="12" cy="13" r="3" />
     </svg>
   );
 }
@@ -187,6 +170,8 @@ function hasLiveValue(value) {
 }
 
 function buildMetrics(surf) {
+  const waveGenre = surf?.waveGenre ?? null;
+
   return [
     {
       id: 'waveHeight',
@@ -194,6 +179,11 @@ function buildMetrics(surf) {
       value: surf?.waveHeight ?? PLACEHOLDER,
       icon: IconWave,
       live: hasLiveValue(surf?.waveHeight),
+      waveGenre,
+      waveImageUrl: getWaveGenreImageUrl(waveGenre),
+      waveGenreDescription: waveGenre
+        ? WAVE_GENRES[waveGenre]?.description
+        : null,
     },
     {
       id: 'swellPeriod',
@@ -252,14 +242,34 @@ function formatUpdatedLabel(isoTime, now) {
 function MetricTile({ metric }) {
   const Icon = metric.icon;
   const isPlaceholder = metric.value === PLACEHOLDER;
+  const isWaveHeight = metric.id === 'waveHeight';
+  const showWaveVisual = isWaveHeight && metric.waveImageUrl && metric.waveGenre;
 
   return (
-    <article className={`metric ${metric.live ? 'metric--live' : 'metric--pending'}`}>
-      <div className="metric__icon-wrap">
-        <Icon />
-      </div>
+    <article
+      className={`metric ${metric.live ? 'metric--live' : 'metric--pending'} ${
+        isWaveHeight ? 'metric--wave' : ''
+      }`}
+    >
+      {showWaveVisual ? (
+        <div className="metric__wave-visual" aria-hidden="true">
+          <img
+            src={metric.waveImageUrl}
+            alt={`${metric.waveGenre} wave conditions`}
+            className="metric__wave-image"
+            loading="lazy"
+          />
+        </div>
+      ) : (
+        <div className="metric__icon-wrap">
+          <Icon />
+        </div>
+      )}
       <div className="metric__body">
         <span className="metric__label">{metric.label}</span>
+        {showWaveVisual && (
+          <span className="metric__wave-genre">{metric.waveGenre}</span>
+        )}
         <p className={`metric__value ${isPlaceholder ? 'metric__value--placeholder' : ''}`}>
           {metric.value}
           {metric.unit && !isPlaceholder && (
@@ -269,6 +279,9 @@ function MetricTile({ metric }) {
             <span className="metric__unit metric__unit--muted">{metric.unit}</span>
           )}
         </p>
+        {showWaveVisual && metric.waveGenreDescription && (
+          <p className="metric__wave-desc">{metric.waveGenreDescription}</p>
+        )}
       </div>
     </article>
   );
@@ -498,17 +511,8 @@ function DashboardApp({ username, onLogout, isAdmin }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState(null);
-  const [sending, setSending] = useState(false);
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [now, setNow] = useState(() => new Date());
   const isFirstLoad = useRef(true);
-  const chatEndRef = useRef(null);
-  const imageInputRef = useRef(null);
 
   const fetchSurf = useCallback(async (spot, { isInitial = false } = {}) => {
     if (isInitial) {
@@ -550,140 +554,8 @@ function DashboardApp({ username, onLogout, isAdmin }) {
     return () => clearInterval(tick);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchChat() {
-      setChatLoading(true);
-      setChatError(null);
-
-      try {
-        const res = await fetch(
-          `${CHAT_API}?spot=${encodeURIComponent(currentSpot)}`
-        );
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.message || `HTTP ${res.status}`);
-        }
-
-        if (!cancelled) {
-          setMessages(data.messages ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setChatError(err.message);
-          setMessages([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setChatLoading(false);
-        }
-      }
-    }
-
-    fetchChat();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentSpot]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentSpot]);
-
-  useEffect(() => {
-    return () => {
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-      }
-    };
-  }, [imagePreviewUrl]);
-
-  const clearImageSelection = useCallback(() => {
-    setImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setImageFile(null);
-    if (imageInputRef.current) {
-      imageInputRef.current.value = '';
-    }
-  }, []);
-
   const handleSpotChange = (e) => {
     setCurrentSpot(e.target.value);
-    clearImageSelection();
-  };
-
-  const handleImageSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-    setImageFile(file);
-  };
-
-  const canSend = Boolean(chatInput.trim() || imageFile);
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-
-    const trimmedMessage = chatInput.trim();
-    const storedUsername =
-      localStorage.getItem('username')?.trim() || DEFAULT_CHAT_USER;
-
-    if (!canSend || sending) return;
-
-    const optimisticId = `temp-${Date.now()}`;
-    const optimisticMessage = {
-      id: optimisticId,
-      spot: currentSpot,
-      user: storedUsername,
-      message: trimmedMessage,
-      timestamp: new Date().toISOString(),
-      ...(imagePreviewUrl && { imageUrl: imagePreviewUrl }),
-    };
-
-    setMessages((prev) => [...prev, optimisticMessage]);
-    setChatInput('');
-    setSending(true);
-    setChatError(null);
-
-    const formData = new FormData();
-    formData.append('spot', currentSpot);
-    formData.append('user', storedUsername);
-    formData.append('message', trimmedMessage);
-    if (imageFile) {
-      formData.append('image', imageFile);
-    }
-
-    try {
-      const res = await fetch(CHAT_API, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || `HTTP ${res.status}`);
-      }
-
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === optimisticId ? data : msg))
-      );
-      clearImageSelection();
-    } catch (err) {
-      setMessages((prev) => prev.filter((msg) => msg.id !== optimisticId));
-      setChatError(err.message);
-      setChatInput(trimmedMessage);
-    } finally {
-      setSending(false);
-    }
   };
 
   const metrics = buildMetrics(surf);
@@ -828,157 +700,6 @@ function DashboardApp({ username, onLogout, isAdmin }) {
                 </div>
               </div>
 
-              <div className="glass__divider glass__divider--chat" />
-
-              <section className="chat" aria-label="Live community chat">
-                <div className="chat__header">
-                  <span className="chat__icon" aria-hidden="true">
-                    <IconChat />
-                  </span>
-                  <div>
-                    <h3 className="chat__title">Live Community Chat</h3>
-                    <p className="chat__subtitle">{currentSpot} · share conditions with locals</p>
-                  </div>
-                </div>
-
-                <div
-                  className="chat__messages"
-                  aria-live="polite"
-                  aria-busy={chatLoading}
-                >
-                  {chatLoading && (
-                    <p className="chat__placeholder">Loading conversation…</p>
-                  )}
-
-                  {!chatLoading && messages.length === 0 && (
-                    <p className="chat__placeholder">
-                      Be the first to report conditions here!
-                    </p>
-                  )}
-
-                  {!chatLoading &&
-                    messages.map((msg) => {
-                      const ts = formatMessageTimestamp(msg.timestamp, now);
-                      return (
-                      <article key={msg.id} className="chat__bubble">
-                        <div className="chat__bubble-meta">
-                          <span className="chat__bubble-user">{msg.user}</span>
-                          <time className="chat__bubble-datetime" dateTime={msg.timestamp}>
-                            {ts.relative ? (
-                              <span className="chat__bubble-relative">{ts.relative}</span>
-                            ) : (
-                              <>
-                                {ts.date && (
-                                  <span className="chat__bubble-date">{ts.date}</span>
-                                )}
-                                {ts.time && (
-                                  <span className="chat__bubble-time">{ts.time}</span>
-                                )}
-                              </>
-                            )}
-                          </time>
-                        </div>
-                        {msg.imageUrl && (
-                          <a
-                            href={msg.imageUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="chat__bubble-image-link"
-                          >
-                            <img
-                              src={msg.imageUrl}
-                              alt="Surf conditions shared in chat"
-                              className="chat__bubble-image"
-                              loading="lazy"
-                            />
-                          </a>
-                        )}
-                        {msg.message ? (
-                          <p className="chat__bubble-text">{msg.message}</p>
-                        ) : null}
-                      </article>
-                    );
-                    })}
-
-                  <div ref={chatEndRef} />
-                </div>
-
-                {chatError && (
-                  <p className="chat__error" role="alert">
-                    {chatError}
-                  </p>
-                )}
-
-                <form className="chat__form" onSubmit={handleSendMessage}>
-                  <p className="chat__posting-as">
-                    Posting as <strong>{username}</strong>
-                  </p>
-
-                  {imagePreviewUrl && imageFile && (
-                    <div className="chat__preview">
-                      <img
-                        src={imagePreviewUrl}
-                        alt=""
-                        className="chat__preview-thumb"
-                      />
-                      <div className="chat__preview-meta">
-                        <span className="chat__preview-name">{imageFile.name}</span>
-                        <button
-                          type="button"
-                          className="chat__preview-remove"
-                          onClick={clearImageSelection}
-                          disabled={sending}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="chat__compose">
-                    <div className="chat__attach-wrap">
-                      <input
-                        ref={imageInputRef}
-                        id="chat-image-input"
-                        type="file"
-                        accept="image/*"
-                        className="chat__file-input"
-                        onChange={handleImageSelect}
-                        disabled={sending}
-                        aria-label="Attach surf photo"
-                      />
-                      <label
-                        htmlFor="chat-image-input"
-                        className={`chat__attach ${imageFile ? 'chat__attach--active' : ''}`}
-                        title="Attach photo"
-                      >
-                        <IconCamera />
-                      </label>
-                    </div>
-
-                    <label className="chat__field chat__field--grow">
-                      <span className="chat__label">Message</span>
-                      <input
-                        type="text"
-                        className="chat__input"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder="Glassy morning, light offshore…"
-                        maxLength={500}
-                        disabled={sending}
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      className="chat__send"
-                      disabled={sending || !canSend}
-                    >
-                      {sending ? 'Sending…' : 'Send'}
-                    </button>
-                  </div>
-                </form>
-              </section>
-
               <p className="glass__footnote">
                 Live conditions via{' '}
                 <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
@@ -1008,6 +729,15 @@ function DashboardApp({ username, onLogout, isAdmin }) {
           <span>Ocean conditions dashboard</span>
         </footer>
       </div>
+
+      {showDashboard && (
+        <ChatWidget
+          currentSpot={currentSpot}
+          username={username}
+          now={now}
+          formatMessageTimestamp={formatMessageTimestamp}
+        />
+      )}
     </div>
   );
 }
