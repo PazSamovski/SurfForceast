@@ -275,11 +275,133 @@ function MetricTile({ metric }) {
   );
 }
 
-function handleLogout() {
+function clearAuthStorage() {
   localStorage.removeItem('username');
   localStorage.removeItem('surfToken');
   localStorage.removeItem('surfUsername');
-  window.location.reload();
+}
+
+function getInitialAuthView() {
+  const token = localStorage.getItem('surfToken');
+  if (!token) {
+    clearAuthStorage();
+    return 'guest';
+  }
+  return 'checking';
+}
+
+function AuthCheckingScreen() {
+  return (
+    <div className="app">
+      <div className="app__bg" aria-hidden="true">
+        <div className="app__glow app__glow--1" />
+        <div className="app__glow app__glow--2" />
+        <div className="app__shimmer" />
+      </div>
+      <div className="shell">
+        <main className="main">
+          <section className="glass glass--centered" aria-busy="true">
+            <div className="loader">
+              <div className="loader__ring" />
+              <p className="loader__text">Checking account…</p>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function AuthGate() {
+  const [authView, setAuthView] = useState(getInitialAuthView);
+  const [displayUsername, setDisplayUsername] = useState(
+    () => localStorage.getItem('username') || ''
+  );
+  const [authRefreshing, setAuthRefreshing] = useState(false);
+
+  const applySession = useCallback((user) => {
+    if (user?.username) {
+      localStorage.setItem('username', user.username);
+      setDisplayUsername(user.username);
+    }
+    setAuthView(user?.isApproved ? 'approved' : 'pending');
+  }, []);
+
+  const checkAuthStatus = useCallback(async () => {
+    const token = localStorage.getItem('surfToken');
+    if (!token) {
+      clearAuthStorage();
+      setDisplayUsername('');
+      setAuthView('guest');
+      return;
+    }
+
+    setAuthRefreshing(true);
+    try {
+      const res = await fetch(AUTH_ME_API, { headers: getAuthHeaders() });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Session expired');
+      }
+      applySession(data.user);
+    } catch {
+      clearAuthStorage();
+      setDisplayUsername('');
+      setAuthView('guest');
+    } finally {
+      setAuthRefreshing(false);
+    }
+  }, [applySession]);
+
+  useEffect(() => {
+    if (authView === 'checking') {
+      checkAuthStatus();
+    }
+  }, [authView, checkAuthStatus]);
+
+  const handleRegisterSuccess = useCallback((data) => {
+    if (data.token) {
+      localStorage.setItem('surfToken', data.token);
+    }
+    if (data.user?.username) {
+      localStorage.setItem('username', data.user.username);
+      setDisplayUsername(data.user.username);
+    }
+    setAuthView(data.user?.isApproved ? 'approved' : 'pending');
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    clearAuthStorage();
+    setDisplayUsername('');
+    setAuthView('guest');
+  }, []);
+
+  if (authView === 'guest') {
+    return <Register onSuccess={handleRegisterSuccess} />;
+  }
+
+  if (authView === 'checking') {
+    return <AuthCheckingScreen />;
+  }
+
+  if (authView === 'pending') {
+    return (
+      <PendingApproval
+        username={displayUsername}
+        onLogout={handleLogout}
+        onRefresh={checkAuthStatus}
+        checking={authRefreshing}
+      />
+    );
+  }
+
+  if (authView === 'approved') {
+    return (
+      <DashboardApp username={displayUsername} onLogout={handleLogout} />
+    );
+  }
+
+  return <Register onSuccess={handleRegisterSuccess} />;
 }
 
 function PendingApproval({ username, onLogout, onRefresh, checking }) {
@@ -330,11 +452,7 @@ function PendingApproval({ username, onLogout, onRefresh, checking }) {
   );
 }
 
-function App() {
-  const [authView, setAuthView] = useState('checking');
-  const [authRefreshing, setAuthRefreshing] = useState(false);
-  const username = localStorage.getItem('username');
-
+function DashboardApp({ username, onLogout }) {
   const [currentSpot, setCurrentSpot] = useState('Netanya');
   const [surf, setSurf] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -351,45 +469,6 @@ function App() {
   const isFirstLoad = useRef(true);
   const chatEndRef = useRef(null);
   const imageInputRef = useRef(null);
-
-  const checkAuthStatus = useCallback(async () => {
-    const token = localStorage.getItem('surfToken');
-    const storedUsername = localStorage.getItem('username');
-
-    setAuthRefreshing(true);
-
-    if (!token || !storedUsername) {
-      setAuthView('guest');
-      setAuthRefreshing(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(AUTH_ME_API, { headers: getAuthHeaders() });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Session expired');
-      }
-
-      if (data.user?.isApproved) {
-        setAuthView('approved');
-      } else {
-        setAuthView('pending');
-      }
-    } catch {
-      localStorage.removeItem('username');
-      localStorage.removeItem('surfToken');
-      localStorage.removeItem('surfUsername');
-      setAuthView('guest');
-    } finally {
-      setAuthRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkAuthStatus();
-  }, [checkAuthStatus]);
 
   const fetchSurf = useCallback(async (spot, { isInitial = false } = {}) => {
     if (isInitial) {
@@ -422,10 +501,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (authView !== 'approved') return;
     fetchSurf(currentSpot, { isInitial: isFirstLoad.current });
     isFirstLoad.current = false;
-  }, [currentSpot, fetchSurf, authView]);
+  }, [currentSpot, fetchSurf]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), TICK_MS);
@@ -433,8 +511,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (authView !== 'approved') return;
-
     let cancelled = false;
 
     async function fetchChat() {
@@ -470,12 +546,11 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentSpot, authView]);
+  }, [currentSpot]);
 
   useEffect(() => {
-    if (authView !== 'approved') return;
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentSpot, authView]);
+  }, [messages, currentSpot]);
 
   useEffect(() => {
     return () => {
@@ -585,56 +660,6 @@ function App() {
   const showDashboard = Boolean(surf);
   const showErrorOnly = error && !surf;
 
-  if (authView === 'checking') {
-    return (
-      <div className="app">
-        <div className="app__bg" aria-hidden="true">
-          <div className="app__glow app__glow--1" />
-          <div className="app__glow app__glow--2" />
-          <div className="app__shimmer" />
-        </div>
-        <div className="shell">
-          <main className="main">
-            <section className="glass glass--centered" aria-busy="true">
-              <div className="loader">
-                <div className="loader__ring" />
-                <p className="loader__text">Checking account…</p>
-              </div>
-            </section>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  if (authView === 'guest') {
-    return (
-      <div className="app">
-        <div className="app__bg" aria-hidden="true">
-          <div className="app__glow app__glow--1" />
-          <div className="app__glow app__glow--2" />
-          <div className="app__shimmer" />
-        </div>
-        <div className="shell">
-          <main className="main">
-            <Register onSuccess={() => window.location.reload()} />
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  if (authView === 'pending') {
-    return (
-      <PendingApproval
-        username={username}
-        onLogout={handleLogout}
-        onRefresh={checkAuthStatus}
-        checking={authRefreshing}
-      />
-    );
-  }
-
   return (
     <div className="app">
       <div className="app__bg" aria-hidden="true">
@@ -659,7 +684,7 @@ function App() {
             <button
               type="button"
               className="topbar__logout-btn"
-              onClick={handleLogout}
+              onClick={onLogout}
             >
               Logout
             </button>
@@ -942,4 +967,6 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return <AuthGate />;
+}
