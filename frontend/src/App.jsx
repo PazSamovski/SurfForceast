@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, Link } from 'react-router-dom';
 import Register from './Register.jsx';
+import AdminDashboard from './Admin.jsx';
+import { getAuthHeaders } from './auth.js';
 import './App.css';
 
 const API_BASE = '/api/surf';
 const CHAT_API = '/api/chat';
 const AUTH_ME_API = '/api/auth/me';
 const DEFAULT_CHAT_USER = 'Local Surfer';
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('surfToken');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 const SPOTS = [
   { id: 'Netanya', label: 'Netanya' },
@@ -317,6 +315,7 @@ function AuthGate() {
   const [displayUsername, setDisplayUsername] = useState(
     () => localStorage.getItem('username') || ''
   );
+  const [isAdmin, setIsAdmin] = useState(false);
   const [authRefreshing, setAuthRefreshing] = useState(false);
 
   const applySession = useCallback((user) => {
@@ -324,6 +323,7 @@ function AuthGate() {
       localStorage.setItem('username', user.username);
       setDisplayUsername(user.username);
     }
+    setIsAdmin(Boolean(user?.isAdmin));
     setAuthView(user?.isApproved ? 'approved' : 'pending');
   }, []);
 
@@ -332,6 +332,7 @@ function AuthGate() {
     if (!token) {
       clearAuthStorage();
       setDisplayUsername('');
+      setIsAdmin(false);
       setAuthView('guest');
       return;
     }
@@ -347,6 +348,7 @@ function AuthGate() {
     } catch {
       clearAuthStorage();
       setDisplayUsername('');
+      setIsAdmin(false);
       setAuthView('guest');
     } finally {
       setAuthRefreshing(false);
@@ -367,12 +369,14 @@ function AuthGate() {
       localStorage.setItem('username', data.user.username);
       setDisplayUsername(data.user.username);
     }
+    setIsAdmin(Boolean(data.user?.isAdmin));
     setAuthView(data.user?.isApproved ? 'approved' : 'pending');
   }, []);
 
   const handleLogout = useCallback(() => {
     clearAuthStorage();
     setDisplayUsername('');
+    setIsAdmin(false);
     setAuthView('guest');
   }, []);
 
@@ -397,7 +401,34 @@ function AuthGate() {
 
   if (authView === 'approved') {
     return (
-      <DashboardApp username={displayUsername} onLogout={handleLogout} />
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <DashboardApp
+                username={displayUsername}
+                onLogout={handleLogout}
+                isAdmin={isAdmin}
+              />
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              isAdmin ? (
+                <AdminDashboard
+                  username={displayUsername}
+                  onLogout={handleLogout}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
     );
   }
 
@@ -452,7 +483,7 @@ function PendingApproval({ username, onLogout, onRefresh, checking }) {
   );
 }
 
-function DashboardApp({ username, onLogout }) {
+function DashboardApp({ username, onLogout, isAdmin }) {
   const [currentSpot, setCurrentSpot] = useState('Netanya');
   const [surf, setSurf] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -681,6 +712,11 @@ function DashboardApp({ username, onLogout }) {
             </div>
           </div>
           <div className="topbar__actions">
+            {isAdmin && (
+              <Link to="/admin" className="topbar__admin-link">
+                Admin
+              </Link>
+            )}
             <button
               type="button"
               className="topbar__logout-btn"

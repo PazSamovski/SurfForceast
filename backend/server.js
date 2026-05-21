@@ -37,7 +37,28 @@ function formatUserResponse(user) {
     username: user.username,
     email: user.email,
     isApproved: Boolean(user.isApproved),
+    isAdmin: Boolean(
+      ADMIN_EMAIL && user.email?.toLowerCase() === ADMIN_EMAIL
+    ),
   };
+}
+
+async function requireAdminUser(userId) {
+  if (!ADMIN_EMAIL) {
+    return { error: { status: 500, message: 'ADMIN_EMAIL is not configured on the server.' } };
+  }
+
+  const user = await User.findById(userId).select('-password');
+
+  if (!user) {
+    return { error: { status: 404, message: 'User not found.' } };
+  }
+
+  if (user.email.toLowerCase() !== ADMIN_EMAIL) {
+    return { error: { status: 403, message: 'Only the authorized admin can access this resource.' } };
+  }
+
+  return { user };
 }
 
 function authMiddleware(req, res, next) {
@@ -450,28 +471,41 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+app.get('/api/admin/users', authMiddleware, async (req, res) => {
+  try {
+    const adminCheck = await requireAdminUser(req.userId);
+
+    if (adminCheck.error) {
+      return res.status(adminCheck.error.status).json({
+        error: true,
+        message: adminCheck.error.message,
+      });
+    }
+
+    const users = await User.find()
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      users: users.map(formatUserResponse),
+    });
+  } catch (err) {
+    console.error('GET /api/admin/users error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to load users.',
+    });
+  }
+});
+
 app.post('/api/approve-user', authMiddleware, async (req, res) => {
   try {
-    if (!ADMIN_EMAIL) {
-      return res.status(500).json({
-        error: true,
-        message: 'ADMIN_EMAIL is not configured on the server.',
-      });
-    }
+    const adminCheck = await requireAdminUser(req.userId);
 
-    const admin = await User.findById(req.userId).select('-password');
-
-    if (!admin) {
-      return res.status(404).json({
+    if (adminCheck.error) {
+      return res.status(adminCheck.error.status).json({
         error: true,
-        message: 'Admin user not found.',
-      });
-    }
-
-    if (admin.email.toLowerCase() !== ADMIN_EMAIL) {
-      return res.status(403).json({
-        error: true,
-        message: 'Only the authorized admin can approve users.',
+        message: adminCheck.error.message,
       });
     }
 
