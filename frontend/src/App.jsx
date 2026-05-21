@@ -359,7 +359,7 @@ function AuthGate() {
     }
   }, [authView, checkAuthStatus]);
 
-  const handleRegisterSuccess = useCallback((data) => {
+  const handleAuthSuccess = useCallback((data) => {
     if (data.token) {
       localStorage.setItem('surfToken', data.token);
     }
@@ -377,7 +377,7 @@ function AuthGate() {
   }, []);
 
   if (authView === 'guest') {
-    return <Register onSuccess={handleRegisterSuccess} />;
+    return <Register onSuccess={handleAuthSuccess} />;
   }
 
   if (authView === 'checking') {
@@ -401,7 +401,7 @@ function AuthGate() {
     );
   }
 
-  return <Register onSuccess={handleRegisterSuccess} />;
+  return <Register onSuccess={handleAuthSuccess} />;
 }
 
 function PendingApproval({ username, onLogout, onRefresh, checking }) {

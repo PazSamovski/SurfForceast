@@ -369,6 +369,66 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body ?? {};
+    const trimmedEmail = String(email ?? '').trim().toLowerCase();
+    const trimmedPassword = String(password ?? '');
+
+    if (!trimmedEmail || !trimmedPassword) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email and password are required.',
+      });
+    }
+
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      return res.status(400).json({
+        error: true,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    const user = await User.findOne({ email: trimmedEmail });
+
+    if (!user) {
+      return res.status(401).json({
+        error: true,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    const passwordMatch = await bcrypt.compare(trimmedPassword, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({
+        error: true,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id.toString(), username: user.username },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: user.isApproved
+        ? 'Welcome back!'
+        : 'Logged in. Waiting for admin approval before you can access the app.',
+      token,
+      user: formatUserResponse(user),
+    });
+  } catch (err) {
+    console.error('POST /api/login error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to log in. Please try again.',
+    });
+  }
+});
+
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
