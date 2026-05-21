@@ -1,10 +1,7 @@
 {
-    {
-        "name": "surf-forecast-root",
-        "version": "1.0.0",
-        "scripts": {
-          "start": "cd backend && node server.js"
-        }
-      }
+    "name": "surf-forecast-root",
+    "version": "1.0.0",
+    "scripts": {
+      "start": "cd backend && node server.js"
     }
-  
+  }
