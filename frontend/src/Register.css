@@ -241,6 +241,126 @@
   cursor: wait;
 }
 
+.register-switch-btn--link {
+  display: inline-block;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.register-forgot {
+  margin: -0.35rem 0 0;
+  text-align: right;
+}
+
+.register-forgot-btn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6ee7f7;
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.register-forgot-btn:hover:not(:disabled) {
+  color: #a5f3fc;
+}
+
+.register-forgot-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.register-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top, 0px))
+    max(5vw, env(safe-area-inset-right, 0px))
+    max(1rem, env(safe-area-inset-bottom, 0px))
+    max(5vw, env(safe-area-inset-left, 0px));
+  background: rgba(3, 26, 43, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.register-modal {
+  position: relative;
+  box-sizing: border-box;
+  width: min(90vw, 400px);
+  max-height: calc(100svh - 2rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1.5rem;
+  border-radius: 20px;
+  background: rgba(8, 40, 64, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 40px rgba(2, 20, 40, 0.55);
+}
+
+.register-modal__close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: rgba(244, 251, 255, 0.6);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.register-modal__close:hover:not(:disabled) {
+  color: #f4fbff;
+}
+
+.register-modal__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f4fbff;
+  padding-right: 1.5rem;
+}
+
+.register-modal__text {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: rgba(244, 251, 255, 0.55);
+  line-height: 1.45;
+}
+
+.register-modal__link-box {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.register-modal__link-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 251, 255, 0.45);
+  margin-bottom: 0.35rem;
+}
+
+.register-modal__link {
+  display: block;
+  font-size: 0.78rem;
+  color: #6ee7f7;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 /* ─── Mobile: full-width card, stacked touch targets ─── */
 @media (max-width: 639px) {
   .register-page {

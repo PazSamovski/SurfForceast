@@ -5,6 +5,7 @@ require('dotenv').config({
   override: true,
 });
 
+const crypto = require('crypto');
 const dns = require('dns');
 const express = require('express');
 const cors = require('cors');
@@ -17,6 +18,7 @@ const multer = require('multer');
 const fs = require('fs').promises;
 const ChatMessage = require('./models/ChatMessage');
 const User = require('./models/User');
+const PasswordResetToken = require('./models/PasswordResetToken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +32,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Only this email may approve users — set ADMIN_EMAIL in .env to your address
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function buildResetUrl(req, token) {
+  const configuredBase = (process.env.APP_BASE_URL || '').trim();
+  const base = configuredBase || `${req.protocol}://${req.get('host')}`;
+  return `${base.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+}
 
 function formatUserResponse(user) {
   return {
@@ -446,6 +459,132 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({
       error: true,
       message: 'Unable to log in. Please try again.',
+    });
+  }
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  try {
+    const trimmedEmail = String(req.body?.email ?? '').trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      return res.status(400).json({
+        error: true,
+        message: 'Email is required.',
+      });
+    }
+
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      return res.status(400).json({
+        error: true,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    const user = await User.findOne({ email: trimmedEmail });
+
+    if (!user) {
+      return res.json({
+        message:
+          'If this email is registered, a password reset link has been generated.',
+      });
+    }
+
+    await PasswordResetToken.updateMany(
+      { userId: user._id, usedAt: null },
+      { $set: { usedAt: new Date() } }
+    );
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+
+    await PasswordResetToken.create({
+      userId: user._id,
+      tokenHash: hashResetToken(rawToken),
+      expiresAt,
+    });
+
+    const resetUrl = buildResetUrl(req, rawToken);
+
+    res.json({
+      message:
+        'Password reset link generated. It expires in 15 minutes and can only be used once.',
+      resetUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
+  } catch (err) {
+    console.error('POST /api/forgot-password error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to process password reset request.',
+    });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const rawToken = String(req.body?.token ?? '').trim();
+    const trimmedPassword = String(req.body?.password ?? '');
+
+    if (!rawToken || !trimmedPassword) {
+      return res.status(400).json({
+        error: true,
+        message: 'Reset token and new password are required.',
+      });
+    }
+
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({
+        error: true,
+        message: 'Password must be at least 6 characters.',
+      });
+    }
+
+    const tokenHash = hashResetToken(rawToken);
+    const resetRecord = await PasswordResetToken.findOne({
+      tokenHash,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!resetRecord) {
+      return res.status(400).json({
+        error: true,
+        message: 'Invalid or expired reset link. Please request a new one.',
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(trimmedPassword, 10);
+
+    const user = await User.findByIdAndUpdate(
+      resetRecord.userId,
+      { password: hashedPassword },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        error: true,
+        message: 'User not found.',
+      });
+    }
+
+    resetRecord.usedAt = new Date();
+    await resetRecord.save();
+
+    await PasswordResetToken.updateMany(
+      { userId: resetRecord.userId, usedAt: null, _id: { $ne: resetRecord._id } },
+      { $set: { usedAt: new Date() } }
+    );
+
+    res.json({
+      message: 'Password updated successfully. You can log in with your new password.',
+    });
+  } catch (err) {
+    console.error('POST /api/reset-password error:', err.message);
+    res.status(500).json({
+      error: true,
+      message: 'Unable to reset password. Please try again.',
     });
   }
 });

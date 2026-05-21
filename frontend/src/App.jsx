@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, Link } from 'react-router-dom';
 import Register from './Register.jsx';
 import AdminDashboard from './Admin.jsx';
+import ResetPassword from './ResetPassword.jsx';
 import { getAuthHeaders } from './auth.js';
 import './App.css';
 
@@ -381,7 +382,12 @@ function AuthGate() {
   }, []);
 
   if (authView === 'guest') {
-    return <Register onSuccess={handleAuthSuccess} />;
+    return (
+      <Routes>
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="*" element={<Register onSuccess={handleAuthSuccess} />} />
+      </Routes>
+    );
   }
 
   if (authView === 'checking') {
@@ -401,8 +407,7 @@ function AuthGate() {
 
   if (authView === 'approved') {
     return (
-      <BrowserRouter>
-        <Routes>
+      <Routes>
           <Route
             path="/"
             element={
@@ -428,11 +433,15 @@ function AuthGate() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
     );
   }
 
-  return <Register onSuccess={handleAuthSuccess} />;
+  return (
+    <Routes>
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="*" element={<Register onSuccess={handleAuthSuccess} />} />
+    </Routes>
+  );
 }
 
 function PendingApproval({ username, onLogout, onRefresh, checking }) {
@@ -1004,5 +1013,9 @@ function DashboardApp({ username, onLogout, isAdmin }) {
 }
 
 export default function App() {
-  return <AuthGate />;
+  return (
+    <BrowserRouter>
+      <AuthGate />
+    </BrowserRouter>
+  );
 }

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import Login from './Login.jsx';
 import './Register.css';
 
 const REGISTER_API = '/api/register';
 
 function Register({ onSuccess, onBack }) {
+  const location = useLocation();
   const [mode, setMode] = useState('register');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -25,6 +27,12 @@ function Register({ onSuccess, onBack }) {
     setError(null);
     setSuccess(null);
   };
+
+  useEffect(() => {
+    if (location.state?.login) {
+      setMode('login');
+    }
+  }, [location.state]);
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
